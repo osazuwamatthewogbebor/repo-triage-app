@@ -42,7 +42,7 @@ jobs:
         run:  npx tsc --noEmit
 
       - name: Build
-        run:  npx run build
+        run:  npm run build
 
       - name: Smoke test the build CLI
         run:  node dist/index.js status
