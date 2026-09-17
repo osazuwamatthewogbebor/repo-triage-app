@@ -25,24 +25,24 @@ jobs:
     runs-on: ubuntu-latest
 
   
-  steps:
-    - name: Check out the code
-      uses: actions/checkout@v6
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v6
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '22'
-        cache: npm
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: npm
 
-    - name: Install dependencies
-      run:  npm ci
+      - name: Install dependencies
+        run:  npm ci
 
-    - name: Typecheck
-      run:  npx tsc --noEmit
+      - name: Typecheck
+        run:  npx tsc --noEmit
 
-    - name: Build
-      run:  npx run build
+      - name: Build
+        run:  npx run build
 
-    - name: Smoke test the build CLI
-      run:  node dist/index.js status
+      - name: Smoke test the build CLI
+        run:  node dist/index.js status
