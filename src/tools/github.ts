@@ -6,7 +6,54 @@ import {
     getRepoFileArgs,
 } from "./validation.js";
 
+
+type GitHubLabel = string | { name?: string };
+
+interface GitHubRepoSearchResponse {
+    total_count: number;
+    incomplete_results: boolean;
+    items: Array<{
+        full_name: string;
+        description: string | null;
+        stargazers_count: number;
+        open_issues_count: number;
+        language: string | null;
+        updated_at: string;
+    }>;
+}
+
+
+interface GitHubIssue {
+    number: number;
+    title: string;
+    body: string | null;
+    labels: GitHubLabel[];
+    comments: number;
+    updated_at: string;
+    state: "open" | "closed";
+    /** Present when the "issue" is actually a pull request. */
+    pull_request?: { url: string };
+}
+
+interface GitHubIssueSearchResponse {
+    total_count: number;
+    incomplete_results: boolean;
+    items: GitHubIssue[];
+}
+
+interface GitHubContentFile {
+    type: string;
+    encoding?: string;
+    content?: string;
+    name: string;
+    path: string;
+    size: number;
+}
+
+
 const GITHUB_API = "https://api.github.com";
+
+
 
 async function makeGithubFetch(endpoint: string): Promise<Response> {
     let headers: Record<string, string> = {
@@ -33,7 +80,7 @@ export async function searchRepos(rawArgs: unknown): Promise<string> {
     const res = await makeGithubFetch(url);
     if (!res.ok) return `Error searching repos: GitHub returned ${res.status} ${res.statusText}`;
 
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as GitHubRepoSearchResponse;
     const repos = (data.items ?? []).map((r: any) => ({
         full_name: r.full_name,
         description: r.description,
@@ -54,7 +101,7 @@ export async function listOpenIssues(rawArgs: unknown): Promise<string> {
     if (res.status === 404) return `Error: Repo "${owner}/${repo}" not found.`;
     if (!res.ok) return `Error fetching issues: GitHub returned ${res.status}`;
 
-    const issues = (await res.json()) as any;
+    const issues = (await res.json()) as GitHubIssue[];
     const onlyIssues = issues.filter((i: any) => !i.pull_request);
 
     return JSON.stringify(
@@ -78,7 +125,7 @@ export async function searchIssues(rawArgs: unknown): Promise<string> {
     const res = await makeGithubFetch(url);
     if (!res.ok) return `Error searching issues: GitHub returned $res.status`;
 
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as GitHubIssueSearchResponse;
     const issues = (data.items ?? []).map((i: any) => ({
         number: i.number,
         title: i.title,
@@ -98,7 +145,7 @@ export async function getRepoFile(rawArgs: unknown): Promise<string> {
     if (res.status === 404) return `Error: File "${path}" not found in ${owner}/${repo}.`;
     if (!res.ok) return `Error fetching file: GitHub returned ${res.status}`;
 
-    const data = (await res.json()) as any;
+    const data = (await res.json()) as GitHubContentFile;
     if (data.encoding === "base64" && data.content) {
         const content = Buffer.from(data.content, "base64").toString("utf-8");
         return content.length > 4000 ? content.slice(0, 4000) + "\n\n[...Truncated" : content;

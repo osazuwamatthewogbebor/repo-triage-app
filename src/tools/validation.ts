@@ -26,3 +26,12 @@ export const getRepoFileArgs = z.object({
     repo: z.string().min(1),
     path: z.string().min(1).default("README.md"),
 })
+
+export const discoveredIssueSchema = z.object({
+    owner: z.string().min(1),
+    repo: z.string().min(1),
+    issueNumber: z.number().int().positive(),
+    title: z.string().min(1),
+    body: z.string().default(""),
+    labels: z.array(z.string()).default([]),
+});

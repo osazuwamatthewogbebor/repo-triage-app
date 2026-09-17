@@ -20,6 +20,33 @@ interface DeviceCodeResponse {
     interval: number;
 }
 
+interface DeviceCodeErrorResponse {
+    error: string;
+    error_description?: string;
+    error_uri?: string;
+}
+
+interface AccessTokenSuccess {
+    access_token: string;
+    token_type: string;
+    scope: string;
+}
+
+interface AccessTokenError {
+    error:
+    | "authorization_pending"
+    | "slow_down"
+    | "expired_token"
+    | "access_denied"
+    | "incorrect_device_code"
+    | "unsupported_grant_type"
+    | "incorrect_client_credentials";
+    error_description?: string;
+    error_uri?: string;
+    /** RFC 8628 allows the server to send a new interval with `slow_down`. */
+    interval?: number;
+}
+
 // Get github token from if it wxists
 function readCachedToken(): string | null {
     try {
@@ -46,16 +73,14 @@ async function requestDeviceCode(clientId: string): Promise<DeviceCodeResponse> 
         body: JSON.stringify({ client_id: clientId, scope: "public_repo" }),
     });
 
-    const data = (await res.json()) as any;
-    if (!res.ok || data.error) {
-        throw new Error(
-            `Github device flow request failed: ${data.error_description ?? data.error ?? res.statusText}`
-        )
+    const data = (await res.json()) as DeviceCodeResponse | DeviceCodeErrorResponse;
+    if ("error" in data || !res.ok) {
+        const detail = "error" in data ? (data.error_description ?? data.error) : res.statusText;
+        throw new Error(`Github device flow request failed: ${detail}`);
     }
 
-    return data as DeviceCodeResponse
+    return data
 }
-
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -74,7 +99,7 @@ async function pollForToken(
     while (Date.now() < deadline) {
         await sleep(interval * 1000);
 
-        const res = await fetch("https://github.com.login/oauth/access_token", {
+        const res = await fetch("https://github.com/login/oauth/access_token", {
             method: "POST",
             headers: { Accept: "application/json", "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -84,9 +109,9 @@ async function pollForToken(
             }),
         });
 
-        const data = (await res.json()) as any;
+        const data = (await res.json()) as AccessTokenSuccess | AccessTokenError;
 
-        if (data.access_token) return data.access_token as string;
+        if ("access_token" in data) return data.access_token;
         if (data.error === "authorization_pending") continue;
         if (data.error === "slow_down") {
             interval += 5;
@@ -113,13 +138,13 @@ export async function getGithubToken(): Promise<string> {
         );
     }
 
-    const { 
-        device_code, 
-        user_code, 
-        verification_uri, 
+    const {
+        device_code,
+        user_code,
+        verification_uri,
         verification_uri_complete,
-        expires_in, 
-        interval 
+        expires_in,
+        interval
     } = await requestDeviceCode(clientId);
 
     console.log(`\nAuthorization needed for Github.`);

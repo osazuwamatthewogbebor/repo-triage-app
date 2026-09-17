@@ -1,10 +1,10 @@
 // Tool definitions
 
-import { required } from "zod/mini";
+import { searchWebSchema } from "./search.js";
 
 export const searchReposSchema = {
     name: "search_repos",
-    description: "Search public GitHub repositories matching specific topisc, languages or update criteria.",
+    description: "Search public GitHub repositories matching specific topics, languages or update criteria.",
     parameters: {
         type: "object",
         properties: {
@@ -61,3 +61,11 @@ export const getRepoFileSchema = {
         required: ["owner", "repo", "path"],
     },
 };
+
+export const githubToolSchema = [
+    searchReposSchema,
+    listOpenIssuesSchema,
+    searchIssuesSchema,
+    getRepoFileSchema,
+    searchWebSchema,
+]

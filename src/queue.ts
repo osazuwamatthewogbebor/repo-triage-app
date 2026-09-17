@@ -75,13 +75,13 @@ export function isProcessedOrQueued(owner: string, repo: string, issueNumber: nu
 }
 
 // Appends a new issue payload to queue.json after verifying deduplication
-export function pushToQueue(item: Omit<QueueItem, "id" | "discovered">): boolean {
+export function pushToQueue(item: Omit<QueueItem, "id" | "discoveredAt">): boolean {
     ensureStorageFilesExist();
 
     const id = `${item.owner}/${item.repo}#${item.issueNumber}`.toLowerCase();
 
     if (isProcessedOrQueued(item.owner, item.repo,item.issueNumber)) {
-        console.log(`[Queue] Skipped duplicate issue: $id`);
+        console.log(`[Queue] Skipped duplicate issue: ${id}`);
         return false;
     }
 
