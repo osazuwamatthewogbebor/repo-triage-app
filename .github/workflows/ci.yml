@@ -1,0 +1,45 @@
+name: CI
+
+# When to run.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# The default token is broad. This workflow only reads the repo, so ask for
+# read-only and nothing else.
+permissions:
+  contents: read
+
+# If you push twice in a row, cancel the older run instead of paying for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Typecheck, build, smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test the built CLI
+        run: node dist/index.js status

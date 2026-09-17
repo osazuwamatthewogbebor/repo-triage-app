@@ -1,6 +1,7 @@
 import { runAgentLoop } from "../core/agent.js";
+import { getProviderChain, withFailover } from "../core/providers.js";
 import { sendDiscordNotification } from "../notifications/discord.js";
-import { markAsProcessed, popNextFromQueue } from "../queue.js";
+import { markAsProcessed, popNextFromQueue, pushToQueue } from "../queue.js";
 import { researchOpenAIToolDefinitions, researchToolRegistry } from "../tools/registry.js";
 
 export async function processQueueNextStage(): Promise<boolean> {
@@ -31,17 +32,42 @@ export async function processQueueNextStage(): Promise<boolean> {
         2. Recommended Technical Approach (citing industry standards)
         3. Step-by-Step Implementation Steps matching project conventions.
         `;
-    
 
-        const recommendation = await runAgentLoop({ 
-            systemPrompt, 
+    const outcome = await withFailover(
+        getProviderChain(),
+        (llm) => runAgentLoop({
+            systemPrompt,
             userPrompt,
-            tools:researchOpenAIToolDefinitions,
+            provider: llm,
+            tools: researchOpenAIToolDefinitions,
             toolFunctions: researchToolRegistry,
+        }),
+        (text) => text.trim().length > 0,
+    ).catch((error: unknown) => {
+        // Research failed on every provider, so nothing was posted and the item is
+        // not marked processed. popNextFromQueue already removed it from disk, so
+        // put it back rather than dropping it silently.
+        const requeued = pushToQueue({
+            owner: item.owner,
+            repo: item.repo,
+            issueNumber: item.issueNumber,
+            issueTitle: item.issueTitle,
+            issueBody: item.issueBody,
+            labels: item.labels,
+            repoDocs: item.repoDocs,
         });
 
-        await sendDiscordNotification(item, recommendation);
-        markAsProcessed(item.id);
+        if (!requeued) {
+            console.error(`[Stage 2] Could not requeue ${item.id}; the issue has been dropped.`);
+        }
 
-        return true;
+        throw error;
+    });
+
+    console.log(`[Stage 2] Recommendation produced by ${outcome.provider.name}.`);
+
+    await sendDiscordNotification(item, outcome.result);
+    markAsProcessed(item.id);
+
+    return true;
 }

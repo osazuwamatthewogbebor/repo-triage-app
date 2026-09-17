@@ -19,7 +19,7 @@ export const searchWebArgs = z.object({
 
 // Web search tool definition
 export const searchWebSchema = {
-    name: "search_web",
+    name: "search_web" as const,
     description: "Search the web industry standards, framework patterns, and technical solutions",
     parameters: {
         type: "object",
@@ -44,13 +44,13 @@ export async function searchWeb(rawArgs: unknown): Promise<string> {
         const res = await fetch(apiUrl, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ api_key: apiKey, max_results: 3}),
+            body: JSON.stringify({ api_key: apiKey, query, max_results: 3}),
         });
 
         if (!res.ok) return `Search API returned ${res.status}`;
         const data = (await res.json()) as SearchResponse;
 
-        const results = (data.results ?? []).map((r: any) => ({
+        const results = (data.results ?? []).map((r: SearchResult) => ({
             title: r.title,
             url: r.url,
             snippet: r.content,

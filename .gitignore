@@ -1,3 +1,11 @@
 node_modules/
+dist/
+
+# Secrets. The negation must come after .env.* or the template stays ignored.
 .env
 .env.*
+!.env.example
+
+# Runtime state
+queue.json
+processed.json

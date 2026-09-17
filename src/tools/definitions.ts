@@ -3,7 +3,7 @@
 import { searchWebSchema } from "./search.js";
 
 export const searchReposSchema = {
-    name: "search_repos",
+    name: "search_repos" as const,
     description: "Search public GitHub repositories matching specific topics, languages or update criteria.",
     parameters: {
         type: "object",
@@ -18,7 +18,7 @@ export const searchReposSchema = {
 
 
 export const listOpenIssuesSchema = {
-    name: "list_open_issues",
+    name: "list_open_issues" as const,
     description: "Fetch recent open issues from a repository",
     parameters: {
         type: "object",
@@ -33,7 +33,7 @@ export const listOpenIssuesSchema = {
 }
 
 export const searchIssuesSchema = {
-    name: "search_issues",
+    name: "search_issues" as const,
     description: "Search issues inside a specific repository using GitHub search terms(e.g., label or state).",
     parameters: {
         type: "object",
@@ -49,7 +49,7 @@ export const searchIssuesSchema = {
 }
 
 export const getRepoFileSchema = {
-    name: "get_repo_file",
+    name: "get_repo_file" as const,
     description: "Fetch contents of project files (e.g., CONTRIBUTING.md, README.md, package.json) to extract standards.",
     parameters: {
         type: "object",
@@ -67,5 +67,8 @@ export const githubToolSchema = [
     listOpenIssuesSchema,
     searchIssuesSchema,
     getRepoFileSchema,
-    searchWebSchema,
+]
+
+export const researchToolSchema = [
+    searchWebSchema
 ]

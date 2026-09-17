@@ -1,14 +1,15 @@
 import type OpenAI from "openai";
 import { CONFIG } from "../config.js";
-import { githubOpenAIToolDefinitions, githubToolRegistry, type ToolRegistryType } from "../tools/registry.js";
-import { openRouterClient } from "./openrouter.js";
+import { githubOpenAIToolDefinitions, githubToolRegistry, type ToolDefinitions, type ToolRegistryType } from "../tools/registry.js";
+import type { LlmProvider } from "./providers.js";
 
 export interface AgentRunOptions {
     systemPrompt: string;
     userPrompt: string;
-    tools?: typeof githubOpenAIToolDefinitions;
+    /** Pinned by the caller — failing over across providers is the stage's job. */
+    provider: LlmProvider;
+    tools?: ToolDefinitions;
     toolFunctions?: ToolRegistryType;
-    model?: string;
     maxTurns?: number;
 }
 
@@ -16,9 +17,9 @@ export interface AgentRunOptions {
 export async function runAgentLoop({
     systemPrompt,
     userPrompt,
+    provider,
     tools = githubOpenAIToolDefinitions,
     toolFunctions = githubToolRegistry,
-    model = CONFIG.openRouter.model,
     maxTurns = CONFIG.agent.maxTurns
 }: AgentRunOptions): Promise<string> {
     const messages: OpenAI.ChatCompletionMessageParam[] = [
@@ -27,41 +28,43 @@ export async function runAgentLoop({
     ];
 
     for (let turn = 0; turn < maxTurns; turn++) {
-        const response = await openRouterClient.chat.completions.create({
-            model,
+        const response = await provider.client.chat.completions.create({
+            model: provider.model,
             messages,
-            max_tokens: 2000,
-            ...(tools.length > 0 ? {tools} : {}),
+            max_tokens: provider.maxTokens,
+            ...(tools.length > 0 ? { tools } : {}),
         });
 
         const choice = response.choices[0];
         if (!choice) {
-            throw new Error("OpenRouter returned an empty choices array")
+            throw new Error(`${provider.name} returned an empty choices array`)
         }
 
         const message = choice.message;
 
-        // Base case: Model has finished executing tools and provided a final textual answer
+        // Base case: Model has finished executing tools and provided a final textual answer.
+        // Returns "" rather than a placeholder so the caller can tell "no answer" from an answer.
         if (choice.finish_reason !== "tool_calls" || !message.tool_calls) {
-            return message.content ?? "(no content returned)";
+            return message.content ?? "";
         }
 
         // Push the assistant turn verbatim back into history (required by OpenAI protocol)
         messages.push(message)
 
-        // Process all requested tool calls in parallel/sequence
+        // Process all requested tool calls in sequence
         for (const toolCall of message.tool_calls) {
             let fnName: string;
             let resultText: string;
 
             if (toolCall.type !== "function") {
-                // Custom tool call 
+                // Custom tool call. Only function tools are advertised, but every
+                // tool_call_id still needs a reply — see the push below.
                 fnName = toolCall.custom.name;
                 resultText = `Error: Tool "${fnName}" is a custom tool; this agent only supports function tools.`;
             } else {
                 fnName = toolCall.function.name;
                 const fn = toolFunctions[fnName];
-                
+
                 if (!fn) {
                     resultText = `Error: Tool "${fnName}" is not registered in registry`;
                 } else {
@@ -74,18 +77,22 @@ export async function runAgentLoop({
                         resultText = `Error running ${fnName}: ${errorMsg}`;
                     }
                 }
-                
-                console.log(`[Agent Loop] Tool Execution: ${fnName} -> ${resultText.slice(0, 120)}...`);
-                
-                // Append tool result message referencing original tool_call_id
-                messages.push({
-                    role: "tool",
-                    tool_call_id: toolCall.id,
-                    content: resultText,
-                });
             }
+
+            console.log(`[Agent Loop] Tool Execution: ${fnName} -> ${resultText.slice(0, 120)}...`);
+
+            // Append tool result message referencing original tool_call_id. Must happen
+            // for every call, including custom ones, or the next request is rejected for
+            // leaving an assistant tool_call unanswered.
+            messages.push({
+                role: "tool",
+                tool_call_id: toolCall.id,
+                content: resultText,
+            });
         }
     }
 
-    return "Agent reached maximum conversation turn limit without producing a final answer."
+    throw new Error(
+        `Agent loop exhausted ${maxTurns} turns on ${provider.name} without producing a final answer.`
+    );
 }

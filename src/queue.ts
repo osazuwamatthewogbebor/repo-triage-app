@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { json, z } from "zod";
+import { z } from "zod";
 
 const QUEUE_FILE = path.resolve(process.cwd(), "queue.json");
 const PROCESSED_FILE = path.resolve(process.cwd(), "processed.json");

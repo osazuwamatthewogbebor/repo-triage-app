@@ -1,41 +1,50 @@
-// Type signature for executable tool functions.
-// All functions accept an unvalidated `unknown` argument (parsed via Zod inside the function)
-// and return a JSON string result or readable error message.
-
-import { githubToolSchema } from "./definitions.js";
+import type OpenAI from "openai";
+import { githubToolSchema, researchToolSchema } from "./definitions.js";
 import { getRepoFile, listOpenIssues, searchIssues, searchRepos } from "./github.js";
-import { searchWeb, searchWebSchema } from "./search.js";
+import { searchWeb } from "./search.js";
 
 export type ToolFunctionType = (rawArgs: unknown) => Promise<string>;
 export type ToolRegistryType = Record<string, ToolFunctionType>
 
-// Central dictionary mapping OpenAI tool function to their implementations.
+export type ToolDefinitions = OpenAI.ChatCompletionTool[];
 
-// 1. GitHub tools
-export const githubToolRegistry: ToolRegistryType = {
+// Central dictionary mapping OpenAI tool function to their implementations.
+// `satisfies` rather than a `: ToolRegistryType` annotation: it checks the shape
+// but keeps the literal keys, which is what the guard below compares against.
+export const githubToolRegistry = {
     search_repos: searchRepos,
     list_open_issues: listOpenIssues,
     search_issues: searchIssues,
     get_repo_file: getRepoFile,
-};
+} satisfies ToolRegistryType;
 
-// 2. Research tools
-export const researchToolRegistry: ToolRegistryType = {
+export const researchToolRegistry = {
     search_web: searchWeb,
-};
+} satisfies ToolRegistryType;
+
+// Compile-time guard: every tool advertised in the schemas must have an
+// implementation in the registry. The two sides are separate literals, so
+// nothing else stops someone adding a schema and forgetting the function.
+// `never` passes the constraint; any leftover name fails the build. Exported so
+// they read as part of the module surface rather than as dead code.
+type AssertNever<T extends never> = T;
+
+export type GithubToolsImplemented = AssertNever<
+    Exclude<(typeof githubToolSchema)[number]["name"], keyof typeof githubToolRegistry>
+>;
+
+export type ResearchToolsImplemented = AssertNever<
+    Exclude<(typeof researchToolSchema)[number]["name"], keyof typeof researchToolRegistry>
+>;
 
 
-// Schema definitions
-// Export schemas in OpenAI-compatible tool format
-
-// GitHub Schemas
-export const githubOpenAIToolDefinitions = githubToolSchema.map((schema) => ({
+// Schema definitions in OpenAI-compatible tool format
+export const githubOpenAIToolDefinitions: ToolDefinitions = githubToolSchema.map((schema) => ({
     type: "function" as const,
     function: schema,
 }));
 
-// Research Schemas
-export const researchOpenAIToolDefinitions = [searchWebSchema].map((schema) => ({
+export const researchOpenAIToolDefinitions: ToolDefinitions = researchToolSchema.map((schema) => ({
     type: "function" as const,
     function: schema,
 }));

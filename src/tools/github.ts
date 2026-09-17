@@ -123,7 +123,7 @@ export async function searchIssues(rawArgs: unknown): Promise<string> {
     const url = `/search/issues?q=${encodeURIComponent(q)}&per_page=${limit}`;
 
     const res = await makeGithubFetch(url);
-    if (!res.ok) return `Error searching issues: GitHub returned $res.status`;
+    if (!res.ok) return `Error searching issues: GitHub returned ${res.status}`;
 
     const data = (await res.json()) as GitHubIssueSearchResponse;
     const issues = (data.items ?? []).map((i: any) => ({
